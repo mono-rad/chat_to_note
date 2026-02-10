@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat to Note</title>
+    <link rel="stylesheet" href="/static/css/variables.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- ========== Header ========== -->
+<header class="app-header">
+    <h1>Chat to Note</h1>
+    <div class="header-actions">
+        <button class="btn btn-sm" id="btn-settings" title="設定">&#9881; 設定</button>
+    </div>
+</header>
+
+<!-- ========== Mobile Tabs ========== -->
+<div class="mobile-tabs">
+    <button class="tab active" data-panel="panel-chats">チャット</button>
+    <button class="tab" data-panel="panel-articles">過去記事</button>
+    <button class="tab" data-panel="panel-main">作業</button>
+</div>
+
+<!-- ========== Main Content ========== -->
+<main class="three-panel">
+
+    <!-- Left Panel: Chats -->
+    <aside class="side-panel" id="panel-chats">
+        <div class="panel-header">
+            <h2>チャット</h2>
+            <div class="panel-actions">
+                <button class="btn btn-primary btn-sm" id="btn-import">+ 新規登録</button>
+            </div>
+            <input type="search" class="search-input" id="chat-search" placeholder="チャットを検索...">
+            <div class="tag-filter" id="chat-tag-filter"></div>
+        </div>
+        <ul class="item-list" id="chat-list">
+            <li class="empty-state">チャットがありません。「新規登録」から追加してください。</li>
+        </ul>
+    </aside>
+
+    <!-- Middle Panel: Past Articles -->
+    <aside class="side-panel" id="panel-articles">
+        <div class="panel-header">
+            <h2>過去記事</h2>
+            <input type="search" class="search-input" id="article-search" placeholder="記事を検索...">
+        </div>
+        <ul class="item-list" id="article-list">
+            <li class="empty-state">保存された記事はありません。</li>
+        </ul>
+    </aside>
+
+    <!-- Right Panel: Main Work Area -->
+    <section class="main-panel" id="panel-main">
+        <!-- Controls -->
+        <div class="main-controls">
+            <div class="control-group">
+                <label for="output-mode">出力:</label>
+                <select id="output-mode">
+                    <option value="article">記事</option>
+                    <option value="summary">要約</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="length-select">長さ:</label>
+                <select id="length-select">
+                    <option value="short">短め</option>
+                    <option value="standard" selected>標準</option>
+                    <option value="long">長め</option>
+                </select>
+            </div>
+            <div style="flex:1"></div>
+            <button class="btn btn-primary" id="btn-generate" disabled>&#9998; 下書き生成</button>
+            <button class="btn btn-warning" id="btn-consistency" disabled>&#128269; 一貫性チェック</button>
+            <button class="btn" id="btn-cleanup" disabled>&#10024; 推敲</button>
+        </div>
+
+        <!-- Selection info -->
+        <div class="selection-info" id="selection-info">
+            <span id="selection-text">1件のチャットを選択中</span>
+        </div>
+
+        <!-- Draft content -->
+        <div class="main-content">
+            <div class="draft-area" id="draft-area" contenteditable="false">
+                <p class="placeholder">チャットを選択して「下書き生成」をクリックしてください。</p>
+            </div>
+
+            <!-- Custom prompt section -->
+            <div class="prompt-section">
+                <button class="prompt-toggle" id="prompt-toggle">
+                    &#9660; カスタムプロンプト設定
+                </button>
+                <div class="prompt-content" id="prompt-content">
+                    <textarea id="custom-cleanup-prompt" placeholder="推敲用のカスタムプロンプトを入力（空欄の場合はデフォルトを使用）"></textarea>
+                    <p class="hint" style="margin-top:4px">推敲時に使用するプロンプトをカスタマイズできます。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action bar -->
+        <div class="main-actions">
+            <button class="btn" id="btn-copy" disabled>&#128203; コピー</button>
+            <button class="btn" id="btn-download" disabled>&#11015; ダウンロード</button>
+            <button class="btn btn-success" id="btn-save-article" disabled>&#128190; 記事として保存</button>
+        </div>
+    </section>
+</main>
+
+<!-- ========== Footer ========== -->
+<footer class="app-footer">
+    <button class="btn btn-sm" id="btn-export-db">&#128230; エクスポート</button>
+    <button class="btn btn-sm" id="btn-import-db">&#128229; インポート</button>
+    <input type="file" id="db-import-file" accept=".json" style="display:none">
+</footer>
+
+<!-- ========== Import Dialog ========== -->
+<dialog id="import-dialog">
+    <div class="dialog-header">
+        <h3>チャット登録</h3>
+        <button class="btn-icon" id="import-dialog-close">&times;</button>
+    </div>
+    <div class="dialog-body">
+        <!-- Tabs for paste vs file -->
+        <div class="tabs">
+            <button class="tab active" data-tab="paste-tab">テキスト貼り付け</button>
+            <button class="tab" data-tab="file-tab">ファイルアップロード</button>
+        </div>
+
+        <!-- Paste tab -->
+        <div id="paste-tab">
+            <div class="form-group">
+                <label for="chat-title-input">タイトル</label>
+                <input type="text" id="chat-title-input" placeholder="チャットのタイトル（省略可）">
+            </div>
+            <div class="form-group">
+                <label for="chat-content-input">チャット内容</label>
+                <textarea id="chat-content-input" placeholder="チャット内容を貼り付けてください...&#10;&#10;対応形式: Markdown, JSON (ChatGPT/Claude), テキスト"></textarea>
+            </div>
+            <div class="form-group">
+                <label>タグ</label>
+                <div class="tag-input-wrapper" id="import-tag-wrapper">
+                    <input type="text" id="import-tag-input" placeholder="タグを入力してEnter">
+                </div>
+            </div>
+        </div>
+
+        <!-- File tab -->
+        <div id="file-tab" style="display:none">
+            <div class="file-upload" id="file-upload-area">
+                <div class="upload-icon">&#128193;</div>
+                <div class="upload-text">
+                    クリックまたはドラッグ&ドロップでファイルを選択<br>
+                    <small>.md / .json / .txt に対応</small>
+                </div>
+                <input type="file" id="file-input" accept=".md,.json,.txt">
+            </div>
+            <div id="file-info" style="margin-top:8px;font-size:0.875rem;color:#64748b;display:none"></div>
+            <div class="form-group" style="margin-top:12px">
+                <label>タグ</label>
+                <div class="tag-input-wrapper" id="file-tag-wrapper">
+                    <input type="text" id="file-tag-input" placeholder="タグを入力してEnter">
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="dialog-footer">
+        <button class="btn" id="import-cancel">キャンセル</button>
+        <button class="btn btn-primary" id="import-submit">登録</button>
+    </div>
+</dialog>
+
+<!-- ========== Settings Dialog ========== -->
+<dialog id="settings-dialog">
+    <div class="dialog-header">
+        <h3>設定</h3>
+        <button class="btn-icon" id="settings-dialog-close">&times;</button>
+    </div>
+    <div class="dialog-body">
+        <div class="form-group">
+            <label for="api-key-input">Anthropic API キー</label>
+            <input type="password" id="api-key-input" placeholder="sk-ant-...">
+            <p class="hint">APIキーはサーバー側で管理され、ブラウザには保存されません。</p>
+        </div>
+        <div id="api-key-status" style="font-size:0.875rem;margin-top:8px"></div>
+    </div>
+    <div class="dialog-footer">
+        <button class="btn" id="settings-cancel">キャンセル</button>
+        <button class="btn btn-primary" id="settings-save">保存</button>
+    </div>
+</dialog>
+
+<!-- ========== Consistency Results Dialog ========== -->
+<dialog id="consistency-dialog">
+    <div class="dialog-header">
+        <h3>一貫性チェック結果</h3>
+        <button class="btn-icon" id="consistency-dialog-close">&times;</button>
+    </div>
+    <div class="dialog-body">
+        <div class="consistency-results" id="consistency-results"></div>
+        <div id="consistency-summary" style="margin-top:12px;font-size:0.875rem;color:#64748b"></div>
+    </div>
+    <div class="dialog-footer">
+        <button class="btn" id="consistency-close">閉じる</button>
+    </div>
+</dialog>
+
+<!-- ========== Toast Container ========== -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ========== Scripts ========== -->
+<script src="https://cdn.jsdelivr.net/npm/dexie@4/dist/dexie.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="/static/js/utils.js"></script>
+<script src="/static/js/db.js"></script>
+<script src="/static/js/parsers.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/ui.js"></script>
+<script src="/static/js/app.js"></script>
+
+</body>
+</html>
