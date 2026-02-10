@@ -1,6 +1,25 @@
 // ========== Chat Format Parsers ==========
 
 /**
+ * Extract title from first user message in content.
+ */
+function extractTitleFromMessages(content) {
+    if (!content) return "無題";
+
+    // Look for first user message pattern
+    const userPattern = /\*\*User:\*\*\s*\n(.+?)(?:\n|$)/i;
+    const match = content.match(userPattern);
+
+    if (match && match[1]) {
+        const firstLine = match[1].trim();
+        return truncateText(firstLine, 50);
+    }
+
+    // Fallback to generic extraction
+    return extractTitleFromContent(content);
+}
+
+/**
  * Auto-detect format and parse input.
  * Returns array of { title, content, source } objects.
  */
@@ -48,19 +67,29 @@ function parseJsonInput(json) {
         const results = [];
         for (const item of json) {
             if (item.mapping) {
+                // ChatGPT conversation format
                 results.push(parseChatGPTConversation(item));
-            } else if (item.chat_messages || item.messages) {
+            } else if (item.chat_messages) {
+                // Claude conversation format
                 results.push(parseClaudeConversation(item));
+            } else if (item.messages && Array.isArray(item.messages)) {
+                // Generic messages array format
+                results.push(parseGenericMessages(item));
             } else {
-                // Generic JSON array item
+                // Unknown format - stringify as fallback
+                const content = JSON.stringify(item, null, 2);
                 results.push({
-                    title: item.title || item.name || "無題",
-                    content: JSON.stringify(item, null, 2),
+                    title: extractTitleFromMessages(content),
+                    content: content,
                     source: "manual",
                 });
             }
         }
-        return results.length > 0 ? results : [{ title: "無題", content: JSON.stringify(json, null, 2), source: "manual" }];
+        return results.length > 0 ? results : [{
+            title: "無題",
+            content: JSON.stringify(json, null, 2),
+            source: "manual"
+        }];
     }
 
     // Single ChatGPT conversation
@@ -79,9 +108,10 @@ function parseJsonInput(json) {
     }
 
     // Fallback: stringify
+    const content = JSON.stringify(json, null, 2);
     return [{
-        title: json.title || "無題",
-        content: JSON.stringify(json, null, 2),
+        title: extractTitleFromMessages(content),
+        content: content,
         source: "manual",
     }];
 }
@@ -90,11 +120,15 @@ function parseJsonInput(json) {
  * Parse ChatGPT conversation object (mapping structure).
  */
 function parseChatGPTConversation(conv) {
-    const title = conv.title || "ChatGPT会話";
     const messages = [];
 
     if (!conv.mapping) {
-        return { title, content: JSON.stringify(conv, null, 2), source: "chatgpt" };
+        const content = JSON.stringify(conv, null, 2);
+        return {
+            title: extractTitleFromMessages(content),
+            content: content,
+            source: "chatgpt"
+        };
     }
 
     // Find root node and traverse
@@ -153,14 +187,19 @@ function parseChatGPTConversation(conv) {
     }
 
     const content = messages.join("\n\n---\n\n");
-    return { title, content: content || "（メッセージなし）", source: "chatgpt" };
+    const finalContent = content || "（メッセージなし）";
+
+    return {
+        title: extractTitleFromMessages(finalContent),
+        content: finalContent,
+        source: "chatgpt"
+    };
 }
 
 /**
  * Parse Claude export format.
  */
 function parseClaudeConversation(conv) {
-    const title = conv.name || conv.title || "Claude会話";
     const msgs = conv.chat_messages || conv.messages || [];
     const messages = [];
 
@@ -182,7 +221,13 @@ function parseClaudeConversation(conv) {
     }
 
     const content = messages.join("\n\n---\n\n");
-    return { title, content: content || "（メッセージなし）", source: "claude" };
+    const finalContent = content || "（メッセージなし）";
+
+    return {
+        title: extractTitleFromMessages(finalContent),
+        content: finalContent,
+        source: "claude"
+    };
 }
 
 /**
@@ -210,7 +255,6 @@ function extractClaudeText(msg) {
  * Parse generic messages array format.
  */
 function parseGenericMessages(json) {
-    const title = json.title || "会話";
     const messages = [];
 
     for (const msg of json.messages) {
@@ -224,7 +268,13 @@ function parseGenericMessages(json) {
     }
 
     const content = messages.join("\n\n---\n\n");
-    return { title, content: content || "（メッセージなし）", source: "manual" };
+    const finalContent = content || "（メッセージなし）";
+
+    return {
+        title: extractTitleFromMessages(finalContent),
+        content: finalContent,
+        source: "manual"
+    };
 }
 
 /**
